@@ -190,10 +190,11 @@ tag you are running.
 - `deshred verify` — prove a binary's decode accuracy against a confirmed block.
 - `deshred capture` — record raw shred traffic to a `.dzcap` file.
 
-The remaining seven (`coverage`, `enrich`, `probe`, `promote`,
-`router-coverage`, `snapshot`, `venue-census`) are measurement tools used to
-build the fixtures `verify` checks against; `deshred <subcommand> --help` if
-curious.
+Of the remaining seven, `probe` is network diagnostics for the raw-shred feed
+(transport smoke test, group/port discovery); the other six (`coverage`,
+`enrich`, `promote`, `router-coverage`, `snapshot`, `venue-census`) are
+measurement tools used to build the fixtures `verify` checks against.
+`deshred <subcommand> --help` if curious.
 
 ## License
 

@@ -37,7 +37,7 @@ table is the complete deployment surface.
 | `DESHRED_LOG_DECODE`   | _(unset)_ | Override for venue decoding.                                |
 | `DESHRED_LOG_ALT`      | _(unset)_ | Override for the address-lookup-table cache.                |
 | `DESHRED_LOG_STATS`    | _(unset)_ | Override for periodic statistics.                           |
-| `DESHRED_LOG_ANSI`     | auto      | Force ANSI color on/off.                                    |
+| `DESHRED_LOG_ANSI`     | `false`   | ANSI color on/off (`true`/`false`). Off by default.         |
 
 ## Measurement tools only
 

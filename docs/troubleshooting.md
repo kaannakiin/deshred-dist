@@ -18,9 +18,10 @@ output. See [limits.md](limits.md#degraded-mode-without-an-rpc-endpoint).
 - A UDP port conflict fails at startup with a bind error; a _silent_ feed means
   the socket is fine and nothing is arriving on it.
 
-## `verify` prints RED / a matrix mismatch
+## `verify` exits with "measured matrices differ from the pinned expectation"
 
-On the shipped verify-kit this means a corrupt or mixed download: re-check
+No `VERIFY GREEN` line, non-zero exit. On the shipped verify-kit this means a
+corrupt or mixed download: re-check
 `checksums.txt` and the kit's `manifest.json` hashes, and make sure the binary
 and the kit come from the same release tag. A mismatch on an intact,
 same-release pair is a bug — report it with the full output.

@@ -27,10 +27,13 @@ command line. The capture is a real mainnet shred slice (slot 440061516); the
 truth file is what that slot's confirmed block actually contained. Nothing in
 the kit requires network access.
 
-If you see `VERIFY RED` / a matrix mismatch instead: your download is corrupt
-or mixed from different releases. Re-check `checksums.txt` and the manifest
-hashes, re-download, and make sure binary and kit come from the same tag. A
-genuine mismatch on an intact download is a bug — please report it.
+On a mismatch there is no green line: the process exits non-zero with
+`Error: verify: measured matrices differ from the pinned expectation in
+expected.json` after printing the measured matrices. That means your download
+is corrupt or mixed from different releases — re-check `checksums.txt` and the
+manifest hashes, re-download, and make sure binary and kit come from the same
+tag. A genuine mismatch on an intact, same-release pair is a bug — please
+report it.
 
 ## What the matrices mean
 
