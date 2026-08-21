@@ -1,0 +1,64 @@
+DESHRED END-USER LICENSE AGREEMENT
+
+This document is not legal advice. Have counsel review it before treating it as
+your binding license.
+
+Last updated: 2026-08-21
+
+1. GRANT OF LICENSE
+   Subject to this Agreement, you are granted a free, non-exclusive,
+   non-transferable license to download and run the deshred binary (the
+   "Software") for your own purposes, including commercial use, on any number
+   of machines you control.
+
+2. NO REDISTRIBUTION
+   You may not redistribute, sublicense, sell, rent, or otherwise make the
+   Software available to any third party, in whole or in part, modified or
+   unmodified, alone or bundled with other software. Sharing a link to the
+   official release page is fine; re-hosting the binary yourself is not.
+
+3. NO REVERSE ENGINEERING
+   You may not reverse engineer, decompile, or disassemble the Software,
+   except to the extent applicable law expressly permits despite this
+   restriction. This is an ordinary intellectual-property clause, not a
+   security control — no claim is made that the Software resists analysis.
+
+4. THIRD-PARTY COMPONENTS
+   The Software incorporates third-party open-source components under their
+   own licenses; see THIRD-PARTY-LICENSES.txt distributed with each release.
+   Nothing in this Agreement restricts any rights those licenses grant you.
+
+5. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+   PURPOSE, AND NON-INFRINGEMENT.
+
+6. NO WARRANTY OF FITNESS FOR TRADING OR FINANCIAL DECISIONS
+   The Software decodes network data and produces predictions about
+   transaction activity before that activity executes on chain. It is not
+   warranted to be accurate, complete, or timely, and it is not warranted fit
+   for making trading, investment, or any other financial or on-chain
+   decision. The bundled `verify` tool lets you measure the Software's
+   accuracy against a real confirmed block yourself; using it does not shift
+   responsibility for decisions made from the Software's output. You bear
+   full responsibility for any action you take, on-chain or otherwise, based
+   on that output.
+
+7. LIMITATION OF LIABILITY
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE AUTHOR WILL NOT BE LIABLE FOR
+   ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR
+   ANY LOSS OF PROFITS, REVENUE, DATA, OR USE, ARISING OUT OF OR RELATED TO
+   THIS AGREEMENT OR THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+   DAMAGES. THE AUTHOR'S TOTAL AGGREGATE LIABILITY FOR ANY CLAIM ARISING OUT
+   OF THIS AGREEMENT WILL NOT EXCEED THE AMOUNT YOU PAID FOR THE SOFTWARE,
+   WHICH IS ZERO.
+
+8. TERMINATION
+   This license terminates automatically upon breach of any term. Upon
+   termination you must stop using the Software and delete all copies in your
+   possession. Sections 4 through 7 survive termination.
+
+9. CHANGES
+   Future releases may be distributed under an updated version of this
+   Agreement; the version distributed with a given release is the one in
+   effect for that release.
