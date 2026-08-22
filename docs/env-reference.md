@@ -1,8 +1,19 @@
 # Environment reference
 
 Every variable has a same-named CLI flag (`DESHRED_PORT` ⇔ `--port`); the flag
-wins when both are set. The binary embeds no endpoints, keys, or secrets — this
-table is the complete deployment surface.
+wins when both are set. The binary embeds no endpoints or secrets — the only
+key inside it is the Ed25519 **public** key that checks your license locally —
+and this table is the complete deployment surface.
+
+## License
+
+| Variable          | Default  | Meaning                                                                                                                                                                                                              |
+| ----------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DESHRED_LICENSE` | _(none)_ | Your personal license key (`dzl1.…`). Required by **`run` only**; `replay`, `verify` and `capture` ignore it. Verified offline against the key embedded in the binary — no network call. Does not expire unless the key says so. |
+
+A missing, malformed, expired or revoked key makes `run` exit before it opens
+any socket, with a message naming the reason; see
+[troubleshooting.md](troubleshooting.md#run-refuses-the-license-key).
 
 ## Ingest
 

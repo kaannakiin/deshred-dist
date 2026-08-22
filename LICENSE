@@ -56,9 +56,17 @@ Last updated: 2026-08-21
 8. TERMINATION
    This license terminates automatically upon breach of any term. Upon
    termination you must stop using the Software and delete all copies in your
-   possession. Sections 4 through 7 survive termination.
+   possession. Sections 4 through 7 and 9 survive termination.
 
-9. CHANGES
+9. LICENSE KEY
+   Certain commands (currently: `run`) require a personal license key issued
+   to you. The key is non-transferable: you may not share, publish, resell, or
+   use another party's key, and doing so terminates this license. A key does
+   not expire unless it says so; a key may be revoked in a later release if it
+   is abused or leaked. Verification happens locally on your machine — the
+   Software sends nothing anywhere to check it.
+
+10. CHANGES
    Future releases may be distributed under an updated version of this
    Agreement; the version distributed with a given release is the one in
    effect for that release.

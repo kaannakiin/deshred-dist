@@ -10,6 +10,7 @@ labels: bug
 - `deshred --version`:
 - Ingest mode: unicast (`DESHRED_GROUPS` empty) / multicast
 - `--rpc` / `DESHRED_RPC` set: yes / no (degraded mode changes expected behavior — see docs/limits.md)
+- License key set (`--license` / `DESHRED_LICENSE`): yes / no — never paste the key itself
 
 ## What happened
 

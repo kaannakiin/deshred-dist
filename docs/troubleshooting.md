@@ -7,6 +7,29 @@ leader signatures cannot be checked, so no slot can be promoted to verified.
 This is a deliberate degrade, not an error — set an RPC endpoint for verified
 output. See [limits.md](limits.md#degraded-mode-without-an-rpc-endpoint).
 
+## `run` refuses the license key
+
+`run` is the only licensed command; it checks the key before touching any
+socket, so a refusal has no side effects. The first line of the error says why:
+
+- `license token is missing` — set `DESHRED_LICENSE` or pass `--license`.
+- `license token is malformed` / `is not valid base64url` /
+  `signature is N bytes, expected 64` / `is too large` — the key got mangled
+  in transit (line break, missing segment, extra text pasted along). Paste it
+  again as one line; leading/trailing whitespace is fine.
+- `license token prefix is not supported by this build` — what you pasted is
+  not a deshred key at all, or it was issued for a newer key generation than
+  this release knows. Ask for a fresh one.
+- `signature does not verify against this build's key` — the key was not
+  issued for this binary (different issuer key, or edited). Ask for a fresh one.
+- `license token expired at unix …` — your key carried an expiry; ask for a
+  renewal.
+- `license token … has been revoked` — the key was retired in this release.
+  Contact the maintainer.
+
+`replay`, `verify` and `capture` never ask for a key — if they do, you are
+running something that is not deshred.
+
 ## The feed is silent (no datagrams in the stats line)
 
 - **Unicast:** confirm your `jito-shredstream-proxy` `--dest-ip-ports` actually

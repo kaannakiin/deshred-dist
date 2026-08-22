@@ -34,9 +34,13 @@ wherever you already receive shreds, and add this host to its
 
 ```sh
 # DESHRED_GROUPS left empty -> unicast mode. There is no separate unicast flag.
+export DESHRED_LICENSE=<your-key>     # or: ./deshred run --license <your-key> ...
 ./deshred run --rpc https://your-rpc-endpoint
 ```
 
+- `run` is the only command that needs a license key (see
+  [env-reference.md](env-reference.md#license)); `replay`, `verify` and
+  `capture` work without one.
 - `--rpc` (or `DESHRED_RPC`) is optional but strongly recommended: without it,
   leader signatures cannot be checked and everything stays `unverified` — see
   [limits.md](limits.md#degraded-mode-without-an-rpc-endpoint).

@@ -39,8 +39,14 @@ validator, and without trusting a third-party feed they cannot audit.
 Builds are handed out personally during the pilot:
 
 **Telegram → [@kaannakiin](https://t.me/kaannakiin)** — tell me roughly what
-you are building and which platform you run on; you get the download link and
-setup help directly.
+you are building and which platform you run on; you get the download link, a
+**personal license key** and setup help directly.
+
+The key unlocks `run` (pass `--license <key>` or set `DESHRED_LICENSE`). It is
+checked locally against a public key inside the binary — nothing is sent
+anywhere — and it does not expire unless yours says so. `verify`, `replay` and
+`capture` need no key at all, so you can audit the decoder before you ever ask
+for one.
 
 ## Run it (two minutes)
 
@@ -50,6 +56,7 @@ cd deshred-<version>-x86_64-unknown-linux-gnu
 
 # Unicast: point a jito-shredstream-proxy --dest-ip-ports at this host:7733,
 # leave DESHRED_GROUPS unset, and go.
+export DESHRED_LICENSE=<your-key>   # from Telegram; run is the only licensed command
 ./deshred run --rpc https://your-rpc-endpoint
 ```
 
@@ -119,6 +126,7 @@ endpoints, keys or secrets.
 | `DESHRED_IFACE`            | `doublezero1`    | Interface to bind (multicast)                                                |
 | `DESHRED_RPC`              | _(none)_         | RPC for leader schedule / lookup tables — without it slots stay `unverified` |
 | `DESHRED_GRPC_LISTEN_ADDR` | `127.0.0.1:9900` | Where the stream is served                                                   |
+| `DESHRED_LICENSE`          | _(none)_         | Your personal key; required by `run` only, verified offline                  |
 
 Full table, logging toggles, degraded-mode behaviour:
 [docs/env-reference.md](docs/env-reference.md) ·
@@ -127,7 +135,8 @@ Full table, logging toggles, degraded-mode behaviour:
 ## License & contact
 
 Free, closed-source binary under a proprietary [EULA](LICENSE) — use it,
-don't redistribute it, no warranty. Third-party components and their licenses:
+don't redistribute it, no warranty; your license key is personal and
+non-transferable. Third-party components and their licenses:
 [THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt) (also inside every
 tarball).
 
