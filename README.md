@@ -1,212 +1,137 @@
 # deshred
 
-**Offline decoding and verification for Solana shred traffic.**
+**See Solana DEX swaps before they land.**
 
-deshred consumes raw Agave shred UDP traffic — from a DoubleZero multicast feed
-or a [`jito-shredstream-proxy`](https://github.com/jito-labs/shredstream-proxy)
-unicast relay — reassembles it into ledger entries and transaction facts before
-the transactions land on chain, decodes swap activity across 10 DEX venues plus
-2 swap routers, and re-publishes the result as a Jito-compatible
-`SubscribeEntries` gRPC stream. It ships as a single closed-source binary with
-an offline `verify` command, so you can check its output against a real
-confirmed block without trusting a word of this README.
+deshred listens to the raw shred traffic validators exchange — over a
+DoubleZero multicast feed or a plain `jito-shredstream-proxy` relay — rebuilds
+the transactions while the block is still being assembled, and tells you which
+swaps are about to hit which pools. Ten DEXes, two routers, one binary, and a
+Jito-compatible gRPC stream you can plug an existing consumer into.
 
-## What deshred is not
+Closed source, free to run during the pilot. No payment system, no signup
+form — just [message me on Telegram](https://t.me/kaannakiin).
 
-- **Not a quoting or trading engine.** It decodes swap intents; it never prices
-  a pool, builds a route, or signs a transaction. There is no execution path in
-  this binary.
-- **Not omniscient about CPIs.** Shreds carry only pre-execution top-level
-  instructions. A swap that happens inside a cross-program invocation (e.g. a
-  Raydium swap invoked from inside an aggregator route) is structurally
-  invisible to shred-level decoding — a property of the data source, not a bug
-  budget. deshred counts what it cannot see instead of pretending otherwise.
-  Two built-in router adapters (Jupiter v6, OKX DEX Router) partially work
-  around this by reading the router's own top-level instruction data, not by
-  seeing inside CPIs.
-- **Not a price or execution guarantee.** Decoded intents are read before the
-  transaction executes. Whether it landed, and whether it moved the pool the
-  way stated, is exactly what `verify`'s matrices measure — see
-  [Prove the binary](#prove-the-binary-verify).
+## What you actually get
 
-## Venue coverage
+- **Pre-confirmation transactions.** Same data a Jito shredstream gives you,
+  reconstructed directly from UDP shreds on your own box. Leader signatures are
+  checked so you are not fed forged slots.
+- **Decoded swap intents**, not raw bytes. Pool, direction, amounts for
+  Meteora DLMM / DAMM v1 / DAMM v2 / DBC, Orca Whirlpool, Raydium CLMM / AMM v4
+  / CPMM, pump.fun and PumpSwap — plus swap intent lifted out of Jupiter v6 and
+  OKX router instructions.
+- **A drop-in gRPC stream.** `SubscribeEntries`, wire-compatible with Jito's
+  `shredstream.proto`. If your code already talks to a shredstream proxy, point
+  it at deshred and it works.
+- **Proof, not promises.** Every release ships an offline `verify` kit: one
+  command replays a real captured slot and checks the decoder against what
+  the confirmed block actually contained. It runs on your machine, needs no
+  network, and takes under a minute.
 
-10 DEX venues are decoded end-to-end (pool identity, swap direction, amounts):
-Meteora DLMM, Meteora DAMM v1, Meteora DAMM v2, Meteora DBC, Orca Whirlpool,
-Raydium CLMM, Raydium AMM v4, Raydium CPMM, pump.fun, PumpSwap.
+## Who it is for
 
-9 of those 10 are **quotable** (they carry a resolvable pool with reserves):
-everything above except pump.fun, whose bonding-curve accounts have no pool to
-quote against — its swaps are still decoded, just never priced. Note that
-quoting itself is not shipped in this binary (see
-[What deshred is not](#what-deshred-is-not)); "quotable" describes the decoded
-data, not a feature.
+Searchers, market makers and analytics teams who want to see on-chain swap
+flow as early as the network physically allows — without standing up a
+validator, and without trusting a third-party feed they cannot audit.
 
-Two additional router adapters (Jupiter v6, OKX DEX Router) extract swap intent
-directly from the router's own top-level instruction bytes, independent of the
-venue list above.
+## Get access
 
-## Supported platforms
+Builds are handed out personally during the pilot:
 
-| Target                      | Status                       | Notes                                                                                                                                                  |
-| --------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `x86_64-unknown-linux-gnu`  | **Primary, fully supported** | The only target the low-latency `run` path is supported on — `recvmmsg`, busy-polling, and core pinning are Linux-only.                                |
-| macOS (`x86_64`, `aarch64`) | Degraded                     | `replay` and `verify` work fully. `run` decodes correctly but is **not** latency-competitive — treat macOS as a development and verification platform. |
-| musl (any arch)             | Not shipped                  | Not promised until proven green in CI.                                                                                                                 |
+**Telegram → [@kaannakiin](https://t.me/kaannakiin)** — tell me roughly what
+you are building and which platform you run on; you get the download link and
+setup help directly.
 
-## Quickstart (unicast via jito-shredstream-proxy)
-
-The fastest path to a working feed does not require DoubleZero access. Point an
-existing [`jito-shredstream-proxy`](https://github.com/jito-labs/shredstream-proxy)
-`--dest-ip-ports` at this host's `DESHRED_PORT`, leave `DESHRED_GROUPS`
-**unset**, and deshred binds a plain unicast socket — no multicast join, no
-group to guess.
+## Run it (two minutes)
 
 ```sh
 tar xzf deshred-<version>-x86_64-unknown-linux-gnu.tar.gz
 cd deshred-<version>-x86_64-unknown-linux-gnu
 
-# DESHRED_GROUPS left empty -> unicast mode (there is no separate "unicast" flag)
+# Unicast: point a jito-shredstream-proxy --dest-ip-ports at this host:7733,
+# leave DESHRED_GROUPS unset, and go.
 ./deshred run --rpc https://your-rpc-endpoint
 ```
 
-Point your proxy at `<this-host>:7733`, or set `DESHRED_PORT` to match your
-proxy's destination port. Details: [docs/quickstart.md](docs/quickstart.md).
+That is the whole setup for the unicast path — no DoubleZero seat needed. Have
+a DoubleZero multicast feed? Set `DESHRED_IFACE` and `DESHRED_GROUPS` to what
+your provider gave you ([docs/multicast.md](docs/multicast.md)).
 
-## Multicast (DoubleZero)
-
-Set `DESHRED_IFACE` to your DoubleZero interface name and `DESHRED_GROUPS` to
-the multicast group(s) your provider assigned you (comma-separated). deshred
-does not ship a group default tuned to any specific provider — enter what your
-provider gives you:
+Then consume the stream from anywhere on the host:
 
 ```sh
-export DESHRED_IFACE=<your-doublezero-interface>
-export DESHRED_GROUPS=<your-assigned-multicast-groups>
-./deshred run --rpc https://your-rpc-endpoint
+grpcurl -plaintext 127.0.0.1:9900 shredstream.ShredstreamProxy/SubscribeEntries
 ```
 
-deshred warns (but does not refuse) if a group falls outside the documented
-`233.84.178.0/24` DoubleZero range — that usually means it is worth
-double-checking with your provider. Details: [docs/multicast.md](docs/multicast.md).
+Full walkthrough: [docs/quickstart.md](docs/quickstart.md) ·
+gRPC details: [docs/grpc.md](docs/grpc.md) ·
+every knob: [docs/env-reference.md](docs/env-reference.md).
 
-## Prove the binary (`verify`)
-
-Download `verify-kit-<version>.tar.gz` from the release you installed — it
-bundles a real captured shred slice plus the ground truth decoded from that
-slot's confirmed block — and run:
+## Is it accurate? Check for yourself
 
 ```sh
 tar xzf verify-kit-<version>.tar.gz
-./deshred verify \
-  --capture slice.dzcap --truth truth.json --alt-journal alt-journal.jsonl \
-  --pools pools.json --expect expected.json
+./deshred verify --capture slice.dzcap --truth truth.json \
+  --alt-journal alt-journal.jsonl --pools pools.json --expect expected.json
+# -> VERIFY GREEN — matrices match expected.json
 ```
 
-Expected output:
+Green means the binary in your hands reproduces the accuracy this release was
+measured at, on a real mainnet slot, offline. The same check gates every
+release before it is published. What the numbers mean and how to run it
+against your own captures: [docs/verify.md](docs/verify.md).
 
-```text
-VERIFY GREEN — matrices match expected.json
-```
+## What it will not do (read this)
 
-That means the binary you downloaded reproduces the same accuracy matrices this
-project measured and pinned at release time. No network access is required —
-the fixture is fully offline. Every published artefact passed this exact check
-in the release pipeline before it was allowed to ship. Matrix definitions and
-interpretation: [docs/verify.md](docs/verify.md).
+- **It does not trade or quote.** It decodes. No pricing, no routing, no
+  signing — there is no execution path in the binary.
+- **It cannot see inside CPIs.** Shreds carry only top-level instructions. A
+  swap wrapped inside another program's call is invisible to _any_ shred-level
+  decoder; deshred counts those instead of hiding them. The router adapters
+  recover what Jupiter/OKX state at the top level — that is as far as the data
+  goes.
+- **Pre-execution means pre-execution.** An intent can belong to a transaction
+  that later reverts, or state a ceiling rather than a fill. `verify` separates
+  those populations instead of blending them into one score.
+- **Latency numbers are not published yet.** They were measured on reference
+  hardware that is being recalibrated; this project does not ship numbers it
+  cannot currently reproduce.
 
-### Measured, receipted
+Everything above, in detail: [docs/limits.md](docs/limits.md).
 
-On the slot the fixture is drawn from (mainnet slot 440061516), the pipeline
-reconstructed 2,213 transactions from raw shreds before execution; 676 were
-votes. The remaining 1,537 matched a public archive's confirmed non-vote
-transaction set **exactly** — same set, same order, zero difference in either
-direction. Across a larger corpus (15 capture windows, 928 slots, ~1.03M
-transactions), FEC recovery succeeded on 293,521 of 293,521 attempted
-recoveries (100%).
+## Platforms
 
-⚠ Throughput and latency numbers are **not published** in current releases —
-the reference hardware they were measured on is being recalibrated, and this
-project does not ship numbers it cannot currently reproduce.
+| Target                     | Status                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `x86_64-unknown-linux-gnu` | **Primary.** The low-latency `run` path lives here (`recvmmsg`, busy-poll, core pinning).                    |
+| macOS `x86_64` / `aarch64` | Works — `replay` and `verify` fully, `run` correct but not latency-tuned. Good for development and auditing. |
+| musl                       | Not shipped until it is green in CI.                                                                         |
 
-## Consuming the gRPC feed
+## Configuration at a glance
 
-`deshred run` re-publishes reconstructed entries as a `SubscribeEntries` stream
-wire-compatible with [Jito Labs' `shredstream.proto`](https://github.com/jito-labs/mev-protos)
-(vendored at a pinned commit, Apache-2.0). Existing Jito shredstream consumers
-connect with no client-side changes.
+Everything is a flag or a same-named environment variable. The binary embeds no
+endpoints, keys or secrets.
 
-```sh
-grpcurl -plaintext 127.0.0.1:9900 list
-# shredstream.ShredstreamProxy
-```
+| Variable                   | Default          | What                                                                         |
+| -------------------------- | ---------------- | ---------------------------------------------------------------------------- |
+| `DESHRED_PORT`             | `7733`           | UDP port the shreds arrive on                                                |
+| `DESHRED_GROUPS`           | _(empty)_        | Multicast groups; **empty = unicast**                                        |
+| `DESHRED_IFACE`            | `doublezero1`    | Interface to bind (multicast)                                                |
+| `DESHRED_RPC`              | _(none)_         | RPC for leader schedule / lookup tables — without it slots stay `unverified` |
+| `DESHRED_GRPC_LISTEN_ADDR` | `127.0.0.1:9900` | Where the stream is served                                                   |
 
-Listen address defaults to `127.0.0.1:9900` (`DESHRED_GRPC_LISTEN_ADDR`); a
-Unix domain socket is available via `DESHRED_GRPC_UDS`. Details:
-[docs/grpc.md](docs/grpc.md).
+Full table, logging toggles, degraded-mode behaviour:
+[docs/env-reference.md](docs/env-reference.md) ·
+[docs/troubleshooting.md](docs/troubleshooting.md).
 
-## Configuration
+## License & contact
 
-Everything is CLI flags or same-named environment variables — the binary embeds
-no endpoints, no keys, no secrets.
+Free, closed-source binary under a proprietary [EULA](LICENSE) — use it,
+don't redistribute it, no warranty. Third-party components and their licenses:
+[THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt) (also inside every
+tarball).
 
-| Variable                   | Default          | Meaning                                                              |
-| -------------------------- | ---------------- | -------------------------------------------------------------------- |
-| `DESHRED_IFACE`            | `doublezero1`    | Network interface to bind.                                           |
-| `DESHRED_PORT`             | `7733`           | UDP port for the shred feed.                                         |
-| `DESHRED_GROUPS`           | _(empty)_        | Comma-separated multicast group(s). **Empty = unicast.**             |
-| `DESHRED_RECV_CORE`        | _(none)_         | CPU core to pin the receive thread (Linux only).                     |
-| `DESHRED_RPC`              | _(none)_         | Solana RPC endpoint. Optional — see [Degraded mode](#degraded-mode). |
-| `DESHRED_GRPC_LISTEN_ADDR` | `127.0.0.1:9900` | gRPC listen address.                                                 |
-| `DESHRED_GRPC_UDS`         | _(none)_         | Unix domain socket path instead of TCP.                              |
-| `DESHRED_LOG_LEVEL`        | `info`           | Base log level.                                                      |
-
-There is no `DESHRED_UNICAST` variable — unicast is derived automatically
-whenever `DESHRED_GROUPS` is empty. Full reference including per-subsystem log
-toggles: [docs/env-reference.md](docs/env-reference.md).
-
-## Degraded mode
-
-`deshred run` starts even without `--rpc`/`DESHRED_RPC` — it does not refuse to
-run. Without an RPC endpoint the leader schedule is unknown, so leader
-signatures cannot be checked and every slot stays `unverified`; that state is
-counted and visible, never silently dropped. Set `--rpc` for verified output.
-See [docs/limits.md](docs/limits.md) for the full list of honest limits.
-
-## Version pins
-
-Each release states the exact `solana-ledger` version its shred wire format and
-FEC recovery were built and verified against (currently `2.3.13`), plus the
-pinned commit of the vendored Jito proto. Pins are bumped deliberately,
-per-release, with the verify fixture re-proven — see the release notes of the
-tag you are running.
-
-## CLI reference
-
-`deshred --help` lists all 11 subcommands. The four you will use as a consumer:
-
-- `deshred run` — start the live feed.
-- `deshred replay` — decode a captured `.dzcap`/`.pcap` file offline.
-- `deshred verify` — prove a binary's decode accuracy against a confirmed block.
-- `deshred capture` — record raw shred traffic to a `.dzcap` file.
-
-Of the remaining seven, `probe` is network diagnostics for the raw-shred feed
-(transport smoke test, group/port discovery); the other six (`coverage`,
-`enrich`, `promote`, `router-coverage`, `snapshot`, `venue-census`) are
-measurement tools used to build the fixtures `verify` checks against.
-`deshred <subcommand> --help` if curious.
-
-## License
-
-Free, closed-source binary under a proprietary [EULA](LICENSE) — no
-redistribution, no warranty, use at your own risk. Third-party components
-(MIT/Apache-2.0 decoders, the vendored Jito proto) are listed with full license
-texts in [THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt), shipped inside
-every release tarball.
-
-## Support
-
-This repository ships binaries and documentation only — no source, no CI. File
-bugs and questions via Issues; the template asks for your platform,
-`deshred --version`, ingest mode (unicast/multicast), and whether
-`--rpc`/`DESHRED_RPC` was set.
+Questions, access, bugs: **Telegram [@kaannakiin](https://t.me/kaannakiin)** or
+open an issue here. The issue template asks for your platform,
+`deshred --version`, ingest mode, and whether `--rpc` was set — that is
+usually enough to reproduce.
