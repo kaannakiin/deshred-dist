@@ -10,7 +10,7 @@ and this table is the complete deployment surface.
 
 | Variable        | Default  | Meaning                                                                                                                                                                                                                          |
 | --------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SHRED_LICENSE` | _(none)_ | Your personal license key (`dzl1.…`). Required by **`run` only**; `replay`, `verify` and `capture` ignore it. Verified offline against the key embedded in the binary — no network call. Does not expire unless the key says so. |
+| `SHRED_LICENSE` | _(none)_ | A pilot license key (`dzl1.…`) — take one from [../PILOT-KEYS.md](../PILOT-KEYS.md). Required by **`run` only**; `replay`, `verify` and `capture` ignore it. Verified offline against the key embedded in the binary — no network call. Pilot keys never expire. |
 
 A missing, malformed, expired or revoked key makes `run` exit before it opens
 any socket, with a message naming the reason; see

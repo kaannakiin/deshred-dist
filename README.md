@@ -12,7 +12,8 @@ Where that traffic comes from and the four ways to feed it:
 [docs/shred-feed.md](docs/shred-feed.md).
 
 Closed source, free to run during the pilot. No payment system, no signup
-form — just [message me on Telegram](https://t.me/kaannakiin).
+form, no gatekeeping: download a build and take a key from
+[PILOT-KEYS.md](PILOT-KEYS.md).
 
 ## What you actually get
 
@@ -60,17 +61,20 @@ validator, and without trusting a third-party feed they cannot audit.
 
 ## Get access
 
-Builds are handed out personally during the pilot:
-
-**Telegram → [@kaannakiin](https://t.me/kaannakiin)** — tell me roughly what
-you are building and which platform you run on; you get the download link, a
-**personal license key** and setup help directly.
+Download a build from [Releases](../../../releases) and take a license key from
+[PILOT-KEYS.md](PILOT-KEYS.md) — 100 of them are published there. **No
+application, no explanation of what you are building, no waiting on a reply.**
 
 The key unlocks `run` (pass `--license <key>` or set `SHRED_LICENSE`). It is
 checked locally against a public key inside the binary — nothing is sent
-anywhere — and it does not expire unless yours says so. `verify`, `replay` and
-`capture` need no key at all, so you can audit the decoder before you ever ask
-for one.
+anywhere — and it never expires. `verify`, `replay` and `capture` need no key
+at all, so you can audit the decoder before you run it.
+
+What is asked in return is **feedback**: what worked, what broke, what was
+missing, what the numbers looked like on your feed. Open an issue here or
+message [@kaannakiin](https://t.me/kaannakiin). Quote the `sub` from your boot
+log (`license accepted sub=pilot-042`) so a report can be told apart from
+another pilot's.
 
 ## Run it (two minutes)
 
@@ -80,7 +84,7 @@ cd deshred-<version>-x86_64-unknown-linux-gnu
 
 # Unicast: point a jito-shredstream-proxy --dest-ip-ports at this host:7733,
 # leave SHRED_GROUPS unset, and go.
-export SHRED_LICENSE=<your-key>   # from Telegram; run is the only licensed command
+export SHRED_LICENSE=<key from PILOT-KEYS.md>   # run is the only licensed command
 ./deshred run --rpc https://your-rpc-endpoint
 ```
 
@@ -171,8 +175,9 @@ Full table, logging toggles, degraded-mode behaviour:
 ## License & contact
 
 Free, closed-source binary under a proprietary [EULA](LICENSE) — use it,
-don't redistribute it, no warranty; your license key is personal and
-non-transferable. Third-party components and their licenses:
+don't redistribute it, no warranty. The pilot keys in
+[PILOT-KEYS.md](PILOT-KEYS.md) are yours to take; reselling one is not allowed,
+using one is. Third-party components and their licenses:
 [THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt) (also inside every
 tarball).
 

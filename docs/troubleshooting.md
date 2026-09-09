@@ -38,7 +38,8 @@ output. See [limits.md](limits.md#degraded-mode-without-an-rpc-endpoint).
 `run` is the only licensed command; it checks the key before touching any
 socket, so a refusal has no side effects. The first line of the error says why:
 
-- `license token is missing` — set `SHRED_LICENSE` or pass `--license`.
+- `license token is missing` — set `SHRED_LICENSE` or pass `--license`; take
+  a key from [../PILOT-KEYS.md](../PILOT-KEYS.md).
 - `license token is malformed` / `is not valid base64url` /
   `signature is N bytes, expected 64` / `is too large` — the key got mangled
   in transit (line break, missing segment, extra text pasted along). Paste it
@@ -50,8 +51,8 @@ socket, so a refusal has no side effects. The first line of the error says why:
   issued for this binary (different issuer key, or edited). Ask for a fresh one.
 - `license token expired at unix …` — your key carried an expiry; ask for a
   renewal.
-- `license token … has been revoked` — the key was retired in this release.
-  Contact the maintainer.
+- `license token … has been revoked` — that key was retired in this release.
+  Take another from [../PILOT-KEYS.md](../PILOT-KEYS.md).
 
 `replay`, `verify` and `capture` never ask for a key — if they do, you are
 running something that is not deshred.

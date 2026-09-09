@@ -59,12 +59,14 @@ Last updated: 2026-08-21
    possession. Sections 4 through 7 and 9 survive termination.
 
 9. LICENSE KEY
-   Certain commands (currently: `run`) require a personal license key issued
-   to you. The key is non-transferable: you may not share, publish, resell, or
-   use another party's key, and doing so terminates this license. A key does
-   not expire unless it says so; a key may be revoked in a later release if it
-   is abused or leaked. Verification happens locally on your machine — the
-   Software sends nothing anywhere to check it.
+   Certain commands (currently: `run`) require a license key. During the pilot
+   a pool of keys is published with this Software (see PILOT-KEYS.md); you may
+   take any one of them and use it, and no permission or disclosure of your
+   purpose is required. You may not resell a key or charge for access to one.
+   A key does not expire unless it says so; a key may be revoked in a later
+   release if it is abused. Verification happens locally on your machine — the
+   Software sends nothing anywhere to check it. This clause governs keys only:
+   the Software itself remains non-redistributable under Section 2.
 
 10. CHANGES
    Future releases may be distributed under an updated version of this

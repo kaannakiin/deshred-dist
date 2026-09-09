@@ -55,3 +55,7 @@ a legacy and a v0 transaction with lookup tables (518 bytes, fully consumed).
 The Jito protos are vendored byte-for-byte and carry no Go package option, so
 `gen.sh` supplies it with `M<file>=` mappings rather than editing a file whose
 bytes are pinned. See [../../proto/jito-shredstream/PIN.md](../../proto/jito-shredstream/PIN.md).
+
+Both files get their **own** Go package. `shredstream.proto` and `shared.proto`
+each declare a message called `Heartbeat`, so mapping them into one package
+fails to compile with `Heartbeat.ProtoReflect already declared`.

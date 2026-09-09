@@ -7,7 +7,10 @@ cd "$(dirname "$0")"
 
 # The vendored Jito protos carry no `option go_package` (nothing upstream needs one), so the Go
 # package is supplied here with M<file>= mappings instead of editing a byte-pinned vendored file.
-MAP="Mshredstream.proto=deshred-entries-go/gen/shredstream,Mshared.proto=deshred-entries-go/gen/shredstream"
+#
+# ⚠ Two mappings, two packages: BOTH files declare a message named `Heartbeat`, so mapping them
+# into one Go package makes `Heartbeat.ProtoReflect already declared` and the build dies.
+MAP="Mshredstream.proto=deshred-entries-go/gen/shredstream,Mshared.proto=deshred-entries-go/gen/shared"
 
 mkdir -p gen
 protoc -I ../../proto/jito-shredstream \
