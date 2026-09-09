@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package deshred.v1;
+
+import "signals.proto";
+import "intents.proto";
+
+// Router route decode: one frame per route INSTRUCTION — not per transaction, not per leg —
+// naming every hop the plan carried, in plan order, including the hops that produced no leg.
+//
+// A leg-only stream structurally cannot say that a route had five hops and this engine claimed
+// two. Same discipline as signals.proto and intents.proto: OURS, additive-only, every enum's 0 an
+// _UNSPECIFIED that is never sent, and no field is ever removed.
+//
+// Joining to intents.proto: (slot, tx_index, tx_ix_index, leg_index) on a claimed hop.
+// `tx_ix_index` is the instruction's own position in the transaction, a flat counter every program
+// shares, so it names one instruction whether the transaction carries two routes of the same
+// router or one each of two routers. `leg_index` restarts at 0 inside every route instruction.
+
+// Mirrors the decoder's own stand-down taxonomy one for one. Not every value can appear in every
+// field: `STAND_DOWN_REASON_UNSIZED` is a pool-poison verdict and never a plan-level refusal. The
+// full set is mirrored anyway so a new decoder reason cannot quietly fall out of sync here.
+enum StandDownReason {
+  STAND_DOWN_REASON_UNSPECIFIED = 0;
+  STAND_DOWN_REASON_UNREADABLE = 1;
+  STAND_DOWN_REASON_UNKNOWN_VARIANT = 2;
+  STAND_DOWN_REASON_EMPTY_PLAN = 3;
+  STAND_DOWN_REASON_RUNTIME_VENUE = 4;
+  STAND_DOWN_REASON_POOL_COUNT_MISMATCH = 5;
+  STAND_DOWN_REASON_ORDER_BROKEN = 6;
+  STAND_DOWN_REASON_MINTS_UNKNOWN = 7;
+  STAND_DOWN_REASON_DIRECTION_CONFLICT = 8;
+  STAND_DOWN_REASON_UNSIZED = 9;
+  STAND_DOWN_REASON_UNATTRIBUTED = 10;
+}
+
+message HopClaimed {
+  // The leg_index of the SwapIntentSignal this hop produced.
+  uint32 leg_index = 1;
+  Dex dex = 2;
+  bytes pool = 3;
+  // next tag: 4
+}
+
+message HopUnmapped {
+  // The router's own venue byte. It is the only thing that names which venue the route wanted;
+  // this build decodes none of them, so there is no Dex to report. Absent only where the router's
+  // hop shape carries no such byte.
+  optional uint32 raw_venue_tag = 1;
+  // next tag: 2
+}
+
+message HopUnresolved {
+  Dex dex = 1;
+  StandDownReason reason = 2;
+  // next tag: 3
+}
+
+message RouteHop {
+  // Position in the plan, counting every hop. ⚠ NOT HopClaimed.leg_index, which counts only the
+  // hops that became legs — the two diverge the moment one hop stands down.
+  uint32 hop_index = 1;
+  // Slot 0 is the route's input; a hop back into slot 0 closes a cycle.
+  uint32 input_slot = 2;
+  uint32 output_slot = 3;
+  uint32 share_num = 4;
+  uint32 share_den = 5;
+
+  // Exactly one is set. A hop that yielded nothing still ships, with a named reason.
+  oneof outcome {
+    HopClaimed claimed = 6;
+    HopUnmapped unmapped = 7;
+    HopUnresolved unresolved = 8;
+  }
+  // next tag: 9
+}
+
+message RouteSignal {
+  uint64 slot = 1;
+  uint32 tx_index = 2;
+  bytes signature = 3;
+  uint32 tx_ix_index = 4;
+
+  Router router = 5;
+  // ⚠ SWAP_MODE_UNSPECIFIED IS sent here, and only here: when plan_stand_down names a refusal
+  // reached before the instruction was parsed far enough to know a mode, there is no mode to
+  // report. plan_stand_down is what tells the reader that.
+  SwapMode mode = 6;
+  optional bytes source_mint = 7;
+  optional bytes dest_mint = 8;
+  // Read as `mode` says: an exact-in route states its input, an exact-out route its output, and a
+  // token-ledger route states neither.
+  optional uint64 stated_amount = 9;
+  optional uint64 min_out = 10;
+  // Basis points the router skims. ⚠ Which side it comes off is not in the instruction, so a
+  // route that charges one seeds no leg amount at all.
+  uint32 platform_fee_bps = 11;
+  // The plan names a venue chosen at run time that could be one this engine quotes, so positional
+  // pool naming was refused for the whole instruction.
+  bool runtime_chosen_venue = 12;
+  // The route ends in the slot it started in — the payer arbitraging, not the payer being routed.
+  bool cyclic = 13;
+
+  repeated RouteHop hops = 14;
+
+  // Set only when the whole plan could not be enumerated. Without it an empty `hops` would read
+  // the same as a plan that named hops and stood every one of them down.
+  optional StandDownReason plan_stand_down = 15;
+
+  uint64 publish_seq = 16;
+  // next tag: 17
+}
+
+message SubscribeRoutesRequest {}
+
+service RouteStream {
+  rpc SubscribeRoutes(SubscribeRoutesRequest) returns (stream RouteSignal);
+}

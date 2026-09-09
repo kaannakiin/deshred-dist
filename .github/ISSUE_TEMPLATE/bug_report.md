@@ -8,9 +8,9 @@ labels: bug
 
 - Platform / OS version (e.g. `x86_64-unknown-linux-gnu`, Ubuntu 22.04):
 - `deshred --version`:
-- Ingest mode: unicast (`DESHRED_GROUPS` empty) / multicast
-- `--rpc` / `DESHRED_RPC` set: yes / no (degraded mode changes expected behavior — see docs/limits.md)
-- License key set (`--license` / `DESHRED_LICENSE`): yes / no — never paste the key itself
+- Ingest mode: unicast (`SHRED_GROUPS` empty) / multicast
+- `--rpc` / `SHRED_RPC` set: yes / no (degraded mode changes expected behavior — see docs/limits.md)
+- License key set (`--license` / `SHRED_LICENSE`): yes / no — never paste the key itself
 
 ## What happened
 
@@ -21,7 +21,7 @@ labels: bug
 ## Logs / evidence
 
 <!--
-Relevant log lines (DESHRED_LOG_LEVEL=debug helps).
+Relevant log lines (SHRED_LOG_LEVEL=debug helps).
 For decode-accuracy claims: the strongest report is a `deshred verify` run
 against a single archive endpoint — include its output.
 Reminder: a CPI-wrapped swap being invisible is a documented structural limit

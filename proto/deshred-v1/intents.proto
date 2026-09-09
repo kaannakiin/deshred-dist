@@ -1,0 +1,153 @@
+syntax = "proto3";
+
+package deshred.v1;
+
+import "signals.proto";
+
+// Pre-execution swap intents: what a landed transaction WILL ask a venue to do, read from its
+// bytes before any validator replays them. Same discipline as signals.proto — OURS, additive-only,
+// every enum's 0 an _UNSPECIFIED that is never sent.
+//
+// ⚠ An intent is the instruction's claim, not the chain's outcome. The transaction may still
+// revert, a stop-short bound may fill less than `exact_amount`, and a Token-2022 fee on the
+// mode-pinned side moves the vault by `amount_pool_side`, not by the stated number.
+
+enum DirectionGap {
+  DIRECTION_GAP_UNSPECIFIED = 0;
+  // The pool is not in this deployment's index yet; a fill was requested.
+  DIRECTION_GAP_POOL_UNKNOWN = 1;
+  // The pool is indexed but lacks the field this venue's witness needs.
+  DIRECTION_GAP_FACTS_INCOMPLETE = 2;
+  // The instruction names a mint or vault the indexed pool does not carry; a refetch was requested.
+  DIRECTION_GAP_MINT_MISMATCH = 3;
+  // Neither the canonical ATAs nor the transaction's own seeded accounts name a side.
+  DIRECTION_GAP_ATA_UNRESOLVED = 4;
+}
+
+enum SwapMode {
+  SWAP_MODE_UNSPECIFIED = 0;
+  SWAP_MODE_EXACT_IN = 1;
+  SWAP_MODE_EXACT_OUT = 2;
+  // The stated amount is a CEILING the program may fill only part of — a bound, not a trade.
+  SWAP_MODE_PARTIAL_FILL = 3;
+}
+
+enum Router {
+  ROUTER_UNSPECIFIED = 0;
+  // The venue instruction sits at top level; no router assembled it.
+  ROUTER_DIRECT = 1;
+  ROUTER_JUPITER_V6 = 2;
+  ROUTER_OKX = 3;
+  ROUTER_DFLOW = 4;
+  ROUTER_AXIOM = 5;
+}
+
+message SwapIntentSignal {
+  uint64 slot = 1;
+  uint32 tx_index = 2;
+  bytes signature = 3;
+  uint32 tx_ix_index = 4;
+  uint32 leg_index = 5;
+
+  Dex dex = 6;
+  bytes pool = 7;
+
+  // Exactly one is set. A gap is a named reason, never a default: an intent that could not be
+  // given a side still ships, with its pool, so "no side" is never read as "no swap".
+  oneof direction {
+    bool a_to_b = 8;
+    DirectionGap direction_gap = 9;
+  }
+
+  SwapMode mode = 10;
+
+  // Exactly one is set. `chained` is a leg sized by the leg before it; `unsized` is one the
+  // instruction never stated (a router leg the fee split leaves unknown).
+  oneof amount {
+    uint64 exact_amount = 11;
+    bool chained = 12;
+    bool unsized = 13;
+  }
+
+  optional uint64 limit = 14;
+  // u128 little-endian, 16 bytes. Zero means "no bound", which several venues hard-code.
+  optional bytes sqrt_price_limit_le16 = 15;
+  optional uint32 price_impact_cap_bps = 16;
+
+  // The instruction itself names a bound the program may stop at before spending exact_amount, so
+  // a smaller fill is the program obeying the argument. ⚠ price_impact_cap_bps is deliberately NOT
+  // one of them: measured against the real program it REVERTS rather than truncates, so a landed
+  // swap never hit it. false is therefore not "will fill whole" — Orca and Raydium CLMM truncate at
+  // the absolute price bound with nothing in the instruction recording it.
+  bool states_a_stop_short = 17;
+
+  // The mint the swap spends and the one it receives. Both absent whenever direction is a gap.
+  optional bytes input_mint = 18;
+  optional bytes output_mint = 19;
+
+  // Read-only lookups of the same cache TxSignal.token22_traits reads; absent for a legacy mint
+  // or when this deployment holds no cache. Turning this stream on requests no fill.
+  Token22MintTrait input_mint_traits = 20;
+  Token22MintTrait output_mint_traits = 21;
+
+  // What the pool side moves for exact_amount once a Token-2022 transfer fee on the mode-pinned
+  // mint is applied: exact-in states gross and the vault is credited net; exact-out states net and
+  // the vault is debited gross. Present only when that mint's traits are FRESH and carry a live fee
+  // for this slot's epoch. ⚠ Never applied to the other side — a fee there leaves exact_amount
+  // exactly right.
+  optional uint64 amount_pool_side = 22;
+
+  Router router = 23;
+  bool cyclic = 24;
+
+  uint64 publish_seq = 25;
+
+  // Where this leg sits in the route plan that produced it. Absent on a direct venue swap, which
+  // has no slot graph and no share — the fields are one message rather than five so "no route"
+  // can never read as a one-hop route whose numbers all happen to be zero.
+  RouteHopRef route_hop = 26;
+  // next tag: 27
+}
+
+message RouteHopRef {
+  // Position in the plan, counting every hop the router named. ⚠ NOT leg_index, which counts only
+  // the hops that became legs: the two diverge the moment one hop stands down.
+  uint32 hop_index = 1;
+  // The route's own token slots. Slot 0 is the route input; a leg back into slot 0 closes a cycle.
+  uint32 input_slot = 2;
+  uint32 output_slot = 3;
+  // What fraction of the input slot this leg takes. The denominator is the router's, not a
+  // convention: Jupiter v1 states percent, v2 and OKX state basis points.
+  uint32 share_num = 4;
+  uint32 share_den = 5;
+  // next tag: 6
+}
+
+// One frame per venue or router INSTRUCTION: every leg the decoder produced for it, leg_index
+// ascending. A direct venue swap is a chain of one. A hop that stood down is not a leg and is not
+// here — RouteStream names it. Frames are not ordered by transaction execution: the legs of one
+// instruction stay together, the instructions of one transaction may interleave with other
+// transactions' frames, and a subscriber that needs execution order sorts on
+// (slot, tx_index, tx_ix_index) itself.
+message SwapIntentChain {
+  uint64 slot = 1;
+  uint32 tx_index = 2;
+  bytes signature = 3;
+  uint32 tx_ix_index = 4;
+  Router router = 5;
+  // Every leg carries the chain's own publish_seq, so a leg copied out of its frame still names
+  // the frame it came from; the per-leg stream numbers the same legs on its own counter.
+  repeated SwapIntentSignal legs = 6;
+  uint64 publish_seq = 7;
+  // next tag: 8
+}
+
+message SubscribeSwapIntentsRequest {}
+message SubscribeSwapIntentChainsRequest {}
+
+service SwapIntentStream {
+  rpc SubscribeSwapIntents(SubscribeSwapIntentsRequest) returns (stream SwapIntentSignal);
+  // The same legs as SubscribeSwapIntents, grouped by the instruction that produced them. A
+  // `chained` leg is sized by the leg before it, so a consumer that sizes legs reads this stream.
+  rpc SubscribeSwapIntentChains(SubscribeSwapIntentChainsRequest) returns (stream SwapIntentChain);
+}

@@ -1,8 +1,34 @@
 # Troubleshooting
 
+## `grpcurl` says the server does not support reflection
+
+```text
+Failed to list services: server does not support the reflection API
+```
+
+Correct and expected — deshred serves no reflection service, so grpcurl has to
+be handed the schema. It ships: use `-import-path`/`-proto` against
+[`proto/`](../proto/) (or the `proto-kit-<version>.tar.gz` release asset), the
+way every command in [grpc.md](grpc.md) does. As a side effect `list` and
+`describe` work with no server running at all.
+
+## `protoc` cannot find a `.proto` file
+
+- `File does not reside within any path specified using --proto_path (or -I).`
+  — the file you named is not under any include root you passed. Add the root
+  that contains it.
+- `Could not make proto path relative: shredstream.proto: No such file or
+directory` — you spelled the file relative to a root you did not pass. The
+  two roots are `proto/jito-shredstream` and `proto/deshred-v1`; pass both when
+  you compile files from both. Worked examples:
+  [proto/README.md](../proto/README.md#include-paths).
+- A missing `google/protobuf/timestamp.proto` means your `protoc` lost its
+  bundled `include/` directory — reinstall it from a package manager. deshred
+  does not vendor well-known types.
+
 ## Everything is `unverified`
 
-Expected when `--rpc`/`DESHRED_RPC` is not set: without the leader schedule,
+Expected when `--rpc`/`SHRED_RPC` is not set: without the leader schedule,
 leader signatures cannot be checked, so no slot can be promoted to verified.
 This is a deliberate degrade, not an error — set an RPC endpoint for verified
 output. See [limits.md](limits.md#degraded-mode-without-an-rpc-endpoint).
@@ -12,7 +38,7 @@ output. See [limits.md](limits.md#degraded-mode-without-an-rpc-endpoint).
 `run` is the only licensed command; it checks the key before touching any
 socket, so a refusal has no side effects. The first line of the error says why:
 
-- `license token is missing` — set `DESHRED_LICENSE` or pass `--license`.
+- `license token is missing` — set `SHRED_LICENSE` or pass `--license`.
 - `license token is malformed` / `is not valid base64url` /
   `signature is N bytes, expected 64` / `is too large` — the key got mangled
   in transit (line break, missing segment, extra text pasted along). Paste it
@@ -33,7 +59,7 @@ running something that is not deshred.
 ## The feed is silent (no datagrams in the stats line)
 
 - **Unicast:** confirm your `jito-shredstream-proxy` `--dest-ip-ports` actually
-  targets this host and this `DESHRED_PORT`, and that `DESHRED_GROUPS` is
+  targets this host and this `SHRED_PORT`, and that `SHRED_GROUPS` is
   empty (a set group switches deshred into multicast mode and it will not read
   your unicast packets).
 - **Multicast:** work through [multicast.md](multicast.md#troubleshooting-a-silent-feed) —
@@ -62,7 +88,7 @@ Retired measurement-era flags (`--unicast`, `--recv-buffer-bytes`,
 stale deployment scripts fail fast instead of misconfiguring quietly. The
 current surface is exactly what `deshred run --help` and
 [env-reference.md](env-reference.md) show. In particular, there is no
-`DESHRED_UNICAST`: unicast is simply `DESHRED_GROUPS` left empty.
+`SHRED_UNICAST`: unicast is simply `SHRED_GROUPS` left empty.
 
 ## macOS: `run` works but seems slow
 
@@ -74,6 +100,6 @@ there. See [limits.md](limits.md).
 ## Reporting a bug
 
 Open an issue with: platform and OS version, `deshred --version`, ingest mode
-(unicast/multicast), whether `--rpc`/`DESHRED_RPC` was set, and the relevant
+(unicast/multicast), whether `--rpc`/`SHRED_RPC` was set, and the relevant
 log lines. For decode-accuracy claims, a `verify` run against a single archive
 endpoint is the strongest possible report.

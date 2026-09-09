@@ -2,11 +2,14 @@
 
 **See Solana DEX swaps before they land.**
 
-deshred listens to the raw shred traffic validators exchange — over a
-DoubleZero multicast feed or a plain `jito-shredstream-proxy` relay — rebuilds
-the transactions while the block is still being assembled, and tells you which
-swaps are about to hit which pools. Ten DEXes, two routers, one binary, and a
+deshred listens to the raw shred traffic validators relay to each other on
+Turbine — from any source that hands it those datagrams — rebuilds the
+transactions while the block is still being assembled, and tells you which swaps
+are about to hit which pools. Ten DEXes, four routers, one binary, and a
 Jito-compatible gRPC stream you can plug an existing consumer into.
+
+Where that traffic comes from and the four ways to feed it:
+[docs/shred-feed.md](docs/shred-feed.md).
 
 Closed source, free to run during the pilot. No payment system, no signup
 form — just [message me on Telegram](https://t.me/kaannakiin).
@@ -16,13 +19,34 @@ form — just [message me on Telegram](https://t.me/kaannakiin).
 - **Pre-confirmation transactions.** Same data a Jito shredstream gives you,
   reconstructed directly from UDP shreds on your own box. Leader signatures are
   checked so you are not fed forged slots.
-- **Decoded swap intents**, not raw bytes. Pool, direction, amounts for
-  Meteora DLMM / DAMM v1 / DAMM v2 / DBC, Orca Whirlpool, Raydium CLMM / AMM v4
-  / CPMM, pump.fun and PumpSwap — plus swap intent lifted out of Jupiter v6 and
-  OKX router instructions.
 - **A drop-in gRPC stream.** `SubscribeEntries`, wire-compatible with Jito's
   `shredstream.proto`. If your code already talks to a shredstream proxy, point
-  it at deshred and it works.
+  it at deshred and it works. What crosses the wire is transactions —
+  slot plus bincode `Vec<Entry>` — not decoded swaps. Exact shape, field by
+  field: [docs/data-model.md](docs/data-model.md).
+- **Venue decoders that are measured, not claimed.** Meteora DLMM / DAMM v1 /
+  DAMM v2 / DBC, Orca Whirlpool, Raydium CLMM / AMM v4 / CPMM, pump.fun and
+  PumpSwap, plus Jupiter v6, OKX, DFlow and Axiom router instructions. They run in `verify`,
+  scored against confirmed blocks, and back the accuracy receipts below.
+  Their live output is an opt-in service, `deshred.v1.SwapIntentStream`:
+  one frame per venue swap leg — pool, side, the mints spent and received,
+  mode, stated amount, stop-short flag — before the transaction executes.
+  Router legs ride the same stream tagged with their router, for every hop whose
+  pool the index already knows; `SubscribeSwapIntentChains` hands you the same
+  legs one instruction per frame, and `deshred.v1.RouteStream` names every hop of
+  a route plan, including the ones that produced no leg.
+- **Opt-in pre-execution signals.** Another gRPC service, off by default, that
+  carries what the pipeline works out on the way past: priority fee, Jito and
+  Helius-Sender tip hits, a durable-nonce classifier, and — the part you cannot
+  derive yourself — provenance, admission refusals, fork observations and arrival
+  timing. The first three are a tested shortcut around rules that are easy to get
+  wrong, not information the entry stream withholds; the rest is this pipeline's
+  own findings. `SubscribeEntries` is unchanged either way.
+  [docs/data-model.md](docs/data-model.md#pre-execution-signals-deshredv1-opt-in).
+- **The schemas and working clients.** Every `.proto` this binary serves ships
+  in [`proto/`](proto/) and as a release asset, with a codegen guide and
+  runnable Rust, Go and TypeScript subscribers in [`examples/`](examples/).
+  Tag numbers and enum values: [docs/proto-reference.md](docs/proto-reference.md).
 - **Proof, not promises.** Every release ships an offline `verify` kit: one
   command replays a real captured slot and checks the decoder against what
   the confirmed block actually contained. It runs on your machine, needs no
@@ -42,7 +66,7 @@ Builds are handed out personally during the pilot:
 you are building and which platform you run on; you get the download link, a
 **personal license key** and setup help directly.
 
-The key unlocks `run` (pass `--license <key>` or set `DESHRED_LICENSE`). It is
+The key unlocks `run` (pass `--license <key>` or set `SHRED_LICENSE`). It is
 checked locally against a public key inside the binary — nothing is sent
 anywhere — and it does not expire unless yours says so. `verify`, `replay` and
 `capture` need no key at all, so you can audit the decoder before you ever ask
@@ -55,22 +79,33 @@ tar xzf deshred-<version>-x86_64-unknown-linux-gnu.tar.gz
 cd deshred-<version>-x86_64-unknown-linux-gnu
 
 # Unicast: point a jito-shredstream-proxy --dest-ip-ports at this host:7733,
-# leave DESHRED_GROUPS unset, and go.
-export DESHRED_LICENSE=<your-key>   # from Telegram; run is the only licensed command
+# leave SHRED_GROUPS unset, and go.
+export SHRED_LICENSE=<your-key>   # from Telegram; run is the only licensed command
 ./deshred run --rpc https://your-rpc-endpoint
 ```
 
-That is the whole setup for the unicast path — no DoubleZero seat needed. Have
-a DoubleZero multicast feed? Set `DESHRED_IFACE` and `DESHRED_GROUPS` to what
-your provider gave you ([docs/multicast.md](docs/multicast.md)).
+That is the whole setup for the unicast path. On a multicast shred fabric, set
+`SHRED_IFACE` and `SHRED_GROUPS` to what your provider assigned
+([docs/multicast.md](docs/multicast.md)); every other source is in
+[docs/shred-feed.md](docs/shred-feed.md).
 
-Then consume the stream from anywhere on the host:
+`--rpc` is not optional in practice: without a leader schedule no slot can be
+attributed to its leader, and the gRPC stream stays empty. Then consume the
+stream from anywhere on the host:
 
 ```sh
-grpcurl -plaintext 127.0.0.1:9900 shredstream.ShredstreamProxy/SubscribeEntries
+tar xzf proto-kit-<version>.tar.gz          # the .proto files, also in proto/ here
+grpcurl -plaintext \
+  -import-path proto/jito-shredstream -proto shredstream.proto \
+  127.0.0.1:9900 shredstream.ShredstreamProxy/SubscribeEntries
 ```
 
+(This server serves no gRPC reflection, so grpcurl needs the schema — which is
+why it ships. Details: [docs/grpc.md](docs/grpc.md).)
+
 Full walkthrough: [docs/quickstart.md](docs/quickstart.md) ·
+where the feed comes from: [docs/shred-feed.md](docs/shred-feed.md) ·
+what you get back: [docs/data-model.md](docs/data-model.md) ·
 gRPC details: [docs/grpc.md](docs/grpc.md) ·
 every knob: [docs/env-reference.md](docs/env-reference.md).
 
@@ -121,12 +156,13 @@ endpoints, keys or secrets.
 
 | Variable                   | Default          | What                                                                         |
 | -------------------------- | ---------------- | ---------------------------------------------------------------------------- |
-| `DESHRED_PORT`             | `7733`           | UDP port the shreds arrive on                                                |
-| `DESHRED_GROUPS`           | _(empty)_        | Multicast groups; **empty = unicast**                                        |
-| `DESHRED_IFACE`            | `doublezero1`    | Interface to bind (multicast)                                                |
-| `DESHRED_RPC`              | _(none)_         | RPC for leader schedule / lookup tables — without it slots stay `unverified` |
-| `DESHRED_GRPC_LISTEN_ADDR` | `127.0.0.1:9900` | Where the stream is served                                                   |
-| `DESHRED_LICENSE`          | _(none)_         | Your personal key; required by `run` only, verified offline                  |
+| `SHRED_PORT`               | `7733`           | UDP port the shreds arrive on                                                |
+| `SHRED_GROUPS`             | _(empty)_        | Multicast groups; **empty = unicast**                                        |
+| `SHRED_IFACE`              | _(none)_         | Interface carrying your multicast feed; required in multicast mode only      |
+| `SHRED_RPC`                | _(none)_         | RPC for leader schedule / lookup tables — without it slots stay `unverified` |
+| `SHRED_RPC_MAX_CONCURRENT` | `16`             | Cap on concurrent RPC calls; halves itself when your endpoint throttles      |
+| `SHRED_GRPC_LISTEN_ADDR`   | `127.0.0.1:9900` | Where the stream is served                                                   |
+| `SHRED_LICENSE`            | _(none)_         | Your personal key; required by `run` only, verified offline                  |
 
 Full table, logging toggles, degraded-mode behaviour:
 [docs/env-reference.md](docs/env-reference.md) ·

@@ -1,0 +1,297 @@
+syntax = "proto3";
+
+package deshred.v1;
+
+// Pre-execution signals the shred pipeline computes but does not carry on the Jito-compatible
+// SubscribeEntries wire. This schema is OURS, not vendored: it is versioned here rather than
+// pinned against an upstream, so the rules are additive-only within v1 — never renumber, retype or
+// repurpose a tag, reserve one only when a field is actually removed, and keep every enum's 0 an
+// _UNSPECIFIED that is never sent, so a client reading a newer variant fails closed.
+
+message TxSignal {
+  uint64 slot = 1;
+  uint32 tx_index = 2;
+  bytes signature = 3;
+
+  // Set only when priority_fee_gap is NONE. ⚠ Absent is never "zero" — read the gap.
+  optional uint64 priority_fee_lamports = 4;
+  PriorityFeeGap priority_fee_gap = 5;
+  optional uint32 cu_limit = 6;
+  optional uint64 cu_price_micro_lamports = 7;
+
+  repeated TipHit tip_hits = 8;
+
+  // Present => the transaction is shaped like a durable-nonce transaction and this is the account
+  // it would advance. Its recent_blockhash then carries the stored nonce, not a blockhash.
+  optional bytes nonce_account = 9;
+
+  uint64 publish_seq = 10;
+
+  // Always set. MISS/STALE are not errors — they state that this deployment's ALT cache could not
+  // answer yet and a fill was requested, which is the difference between "no keys" and "no ALT".
+  AltResolution alt_resolution = 11;
+
+  // The complete account key list in runtime order — static keys, then every lookup's writable
+  // indexes, then every lookup's readonly indexes — as concatenated 32-byte pubkeys. Key i is
+  // bytes [i*32, i*32+32); the count is len/32, and an instruction's account indexes index it
+  // directly.
+  //
+  // ⚠ Flat bytes rather than `repeated bytes` deliberately: measured on the committed capture
+  // (slot 440061516), 1002 of 1537 non-vote transactions carry lookups at ~55 keys each, so the
+  // repeated form would allocate ~55k small vectors per slot per subscriber against 1002 here.
+  //
+  // Empty unless alt_resolution is RESOLVED and the transaction carried at least one lookup: a
+  // legacy transaction's keys are already complete in the SubscribeEntries bytes.
+  bytes account_keys_packed = 12;
+
+  // One entry per distinct Token-2022 mint this transaction moves. Mint traits are account state,
+  // so a subscriber holding only the SubscribeEntries bytes cannot derive them at any price.
+  repeated Token22MintTrait token22_traits = 13;
+
+  // One entry per venue instruction this transaction carries at top level, plus one per venue it
+  // only reaches under a CPI. Derived from the transaction's own bytes with no pool index: what
+  // was touched, never how much — that is SwapIntentStream's question.
+  repeated VenueTouch venue_touches = 14;
+
+  // Tag 15 is held for a future EntryEarly source.
+
+  // Agave's admission-time cost: signature + write-lock + instruction-data + requested-CU +
+  // loaded-accounts-data terms — the number CostTracker::try_add charges to every writable account
+  // before deciding one more transaction fits the block.
+  // ⚠ NOT what the block finally accounts: after execution agave swaps the execution and
+  // loaded-data terms for their measured values, almost always a rebate, and it does so as each
+  // transaction completes — an account's running total is pulled back down throughout block
+  // production. Per transaction this number is exact: it is what gated THIS transaction at its own
+  // admission moment. Summed across a slot it is an upper bound only, and a loose one, because it
+  // compounds every over-request in the slot. Measured against the chain on slot 440061516: all
+  // 1451 costed transactions read at or above their archived computeUnitsConsumed, zero below, and
+  // the slot totals 349_477_578 estimated against 69_833_922 settled — 5.00x. Per transaction this
+  // is a verified upper bound; a per-account sum is not consumption.
+  // ⚠ No ceiling and no ratio ship beside it, on purpose. MAX_WRITABLE_ACCOUNT_UNITS is a
+  // validator binary constant no RPC returns — 12M on agave v4.0, 24M on v4.1, ungated in the
+  // source — so a headroom percentage computed here would go quietly wrong the day an operator's
+  // cluster moves. The numerator is a fact; the ceiling is the operator's.
+  // Set only when cost_gap is NONE.
+  optional uint64 scheduler_cost_units = 16;
+  CostGap cost_gap = 17;
+
+  // Bit i (byte i/8, bit i%8) says account_keys[i] is a lock the runtime would actually take:
+  // header writability minus the two demotions — a protocol-owned key (sysvars, builtins, loaders,
+  // precompiles), and a key this same transaction invokes as a program while carrying no
+  // upgradeable loader. It indexes the SAME key order account_keys_packed carries, so the keys
+  // never travel twice; for a legacy transaction that order is the SubscribeEntries key list.
+  // ⚠ This is NOT the population agave prices write locks by. That one counts the locks the
+  // message ASKS for, demotions included, and is already folded into scheduler_cost_units.
+  // Empty <=> writability_gap is set.
+  bytes writable_account_mask = 18;
+  WritabilityGap writability_gap = 19;
+  // next tag: 20
+}
+
+enum Dex {
+  DEX_UNSPECIFIED = 0;
+  DEX_METEORA_DLMM = 1;
+  DEX_ORCA_WHIRLPOOL = 2;
+  DEX_RAYDIUM_CLMM = 3;
+  DEX_METEORA_DAMM_V2 = 4;
+  DEX_PUMPFUN = 5;
+  DEX_PUMPSWAP = 6;
+  DEX_RAYDIUM_AMM_V4 = 7;
+  DEX_RAYDIUM_CPMM = 8;
+  DEX_METEORA_DAMM_V1 = 9;
+  DEX_METEORA_DBC = 10;
+}
+
+enum VenueEventKind {
+  VENUE_EVENT_KIND_UNSPECIFIED = 0;
+  VENUE_EVENT_KIND_SWAP = 1;
+  VENUE_EVENT_KIND_LIQUIDITY_ADD = 2;
+  VENUE_EVENT_KIND_LIQUIDITY_REMOVE = 3;
+  VENUE_EVENT_KIND_MIGRATION = 4;
+  VENUE_EVENT_KIND_POOL_CREATED = 5;
+  VENUE_EVENT_KIND_OTHER = 6;
+}
+
+message VenueTouch {
+  Dex dex = 1;
+  VenueEventKind kind = 2;
+  optional bytes pool = 3;
+  // Absent => the venue program appears in the key list but no top-level instruction targets it:
+  // it runs under a CPI, whose arguments shreds never carry.
+  optional uint32 tx_ix_index = 4;
+  // false => the instruction targets the venue but no shape this decoder knows.
+  bool decoded = 5;
+}
+
+enum Token22Availability {
+  TOKEN22_AVAILABILITY_UNSPECIFIED = 0;
+  TOKEN22_AVAILABILITY_FRESH = 1;
+  // Last known traits, aged past this deployment's staleness bound; a refetch was requested.
+  TOKEN22_AVAILABILITY_STALE = 2;
+  // Not in this deployment's cache; a fill was requested. Every other field is left at its default,
+  // and that default is never a fact: absent is not "no fee" and not "not paused".
+  TOKEN22_AVAILABILITY_NOT_OBSERVED = 3;
+}
+
+message Token22TransferFee {
+  uint32 basis_points = 1;
+  uint64 maximum_fee = 2;
+  // The epoch these terms take effect in. Both terms ship rather than one resolved pair because
+  // SetTransferFee lands at epoch+2 and the reader's epoch is the one that decides:
+  // epoch >= newer.epoch ? newer : older.
+  uint64 epoch = 3;
+}
+
+message Token22MintTrait {
+  bytes mint = 1;
+  Token22Availability availability = 2;
+
+  // Both present or both absent — absent means the mint carries no TransferFeeConfig at all.
+  Token22TransferFee transfer_fee_older = 3;
+  Token22TransferFee transfer_fee_newer = 4;
+
+  bool paused = 5;
+  bool non_transferable = 6;
+  bool default_state_frozen = 7;
+  bool transfer_hook = 8;
+  optional bytes transfer_hook_program = 9;
+  bool permanent_delegate = 10;
+  bool confidential_transfer = 11;
+
+  // A token move on this mint reverts. Carried rather than left to the reader so a spelling added
+  // later reaches every subscriber without one of them having to learn it.
+  bool blocks_transfer = 12;
+}
+
+enum AltResolution {
+  ALT_RESOLUTION_UNSPECIFIED = 0;
+  // The transaction carried no address table lookups.
+  ALT_RESOLUTION_NOT_APPLICABLE = 1;
+  ALT_RESOLUTION_RESOLVED = 2;
+  // The table is not in this deployment's cache; a fill was requested.
+  ALT_RESOLUTION_MISS = 3;
+  // An index reaches past the cached table; a refetch was requested.
+  ALT_RESOLUTION_STALE = 4;
+}
+
+enum PriorityFeeGap {
+  PRIORITY_FEE_GAP_UNSPECIFIED = 0;
+  // priority_fee_lamports is exact.
+  PRIORITY_FEE_GAP_NONE = 1;
+  // No SetComputeUnitPrice: a real zero.
+  PRIORITY_FEE_GAP_NO_PRICE_STATED = 2;
+  // A price with no SetComputeUnitLimit. The runtime charges against a default it derives from the
+  // instruction mix AND a live FeatureSet, so the fee is not a function of the transaction bytes.
+  PRIORITY_FEE_GAP_LIMIT_UNSTATED = 3;
+  // Malformed or duplicated ComputeBudget instruction — the transaction fails on-chain.
+  PRIORITY_FEE_GAP_INVALID = 4;
+}
+
+enum CostGap {
+  COST_GAP_UNSPECIFIED = 0;
+  // scheduler_cost_units is exact.
+  COST_GAP_NONE = 1;
+  // No SetComputeUnitLimit. The runtime substitutes a default derived from the instruction mix AND
+  // a live FeatureSet (SIMD-0170), so the cost is not a function of the transaction bytes — the
+  // same wall PRIORITY_FEE_GAP_LIMIT_UNSTATED names.
+  COST_GAP_CU_LIMIT_UNSTATED = 2;
+  // Malformed or duplicated ComputeBudget instruction. Agave costs such a transaction at zero and
+  // it fails on-chain regardless, so it is excluded rather than published as free.
+  COST_GAP_COMPUTE_BUDGET_INVALID = 3;
+}
+
+enum WritabilityGap {
+  WRITABILITY_GAP_UNSPECIFIED = 0;
+  // writable_account_mask is exact.
+  WRITABILITY_GAP_NONE = 1;
+  // The transaction carries lookups this deployment's ALT cache could not answer, so the keys the
+  // table would append are absent from account_keys and no mask can name them. Read alt_resolution
+  // for which of MISS/STALE it was.
+  WRITABILITY_GAP_ALT_UNRESOLVED = 2;
+}
+
+enum TipProvider {
+  TIP_PROVIDER_UNSPECIFIED = 0;
+  TIP_PROVIDER_JITO = 1;
+  TIP_PROVIDER_HELIUS_SENDER = 2;
+  TIP_PROVIDER_CUSTOM = 3;
+}
+
+message TipHit {
+  TipProvider provider = 1;
+  uint64 lamports = 2;
+  uint32 ix_index = 3;
+}
+
+message SlotSignal {
+  uint64 slot = 1;
+  uint64 publish_seq = 2;
+  oneof observation {
+    ProvenanceObserved provenance = 3;
+    SlotPoisoned poisoned = 4;
+    ForkObserved fork = 5;
+    ArrivalLatency latency = 6;
+    SlotComplete slot_complete = 7;
+  }
+  // next tag: 8
+}
+
+enum SlotEndReason {
+  SLOT_END_REASON_UNSPECIFIED = 0;
+  SLOT_END_REASON_LAST_SHRED_IN_SLOT = 1;
+  SLOT_END_REASON_TIMEOUT = 2;
+  SLOT_END_REASON_EVICTED = 3;
+}
+
+// The pipeline saw the slot end. ⚠ This is a HINT, not a barrier: it proves only that the slot's
+// transactions were handed to the decode pool, not that their TxSignals have been published — the
+// pool is sharded and its frames arrive unordered. A subscriber closing a per-account window sums
+// ProvenanceObserved.txs over the slot's admitted observations and waits for that many distinct
+// tx_index values; if they never converge it reports a stated partial rather than a wrong total.
+message SlotComplete {
+  optional uint32 last_index = 1;
+  SlotEndReason reason = 2;
+  // next tag: 3
+}
+
+message ProvenanceObserved {
+  bool recovered = 1;
+  bool verified = 2;
+  bool poisoned = 3;
+  uint32 txs = 4;
+  // false => the batch was refused admission and reached neither the entry wire nor the decoders.
+  bool admitted = 5;
+}
+
+enum PoisonReason {
+  POISON_REASON_UNSPECIFIED = 0;
+  POISON_REASON_SIG_MISMATCH = 1;
+  POISON_REASON_FEC_ROOT_CONFLICT = 2;
+  POISON_REASON_FEC_ROOT_CONFLICT_UNVERIFIABLE = 3;
+  POISON_REASON_RECOVERY_ROOT_MISMATCH = 4;
+  POISON_REASON_LEADER_SIG_INVALID = 5;
+}
+
+message SlotPoisoned {
+  PoisonReason reason = 1;
+}
+
+message ForkObserved {
+  uint64 parent_slot = 1;
+  uint64 sibling_slot = 2;
+}
+
+message ArrivalLatency {
+  optional uint64 batch_wait_us = 1;
+  // Absent unless the pipeline was configured to measure it.
+  optional uint64 decode_us = 2;
+  optional uint64 early_forward_us = 3;
+}
+
+message SubscribeTxSignalsRequest {}
+message SubscribeSlotSignalsRequest {}
+
+service SignalStream {
+  rpc SubscribeTxSignals(SubscribeTxSignalsRequest) returns (stream TxSignal);
+  rpc SubscribeSlotSignals(SubscribeSlotSignalsRequest) returns (stream SlotSignal);
+}
